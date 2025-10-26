@@ -88,13 +88,31 @@ jobs:
           cargo install tauri-cli --locked
           echo "$HOME/.cargo/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      # CRITICAL STEP: Build the web assets so Tauri can find them in the distDir
+      # Build the Next.js frontend
       - name: Build Frontend Assets
         working-directory: ./src
-        run: bun run build
-        # Building Next.js application in the src directory
+        run: |
+          echo "Building Next.js application..."
+          bun run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
 
-      - uses: tauri-apps/tauri-action@v0
+      # Verify build output
+      - name: Verify Build Output
+        run: |
+          if [ -d "src/.next" ]; then
+            echo "Next.js build successful"
+          else
+            echo "Next.js build failed - .next directory not found"
+            exit 1
+          fi
+
+      # Build Tauri application
+      - name: Build Tauri App
+        shell: bash
+        run: |
+          cd src-tauri
+          cargo tauri build ${{ matrix.args }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ENABLE_CODE_SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
@@ -104,15 +122,17 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Add Bun to the PATH
-          PATH: ${{ github.workspace }}/.bun/bin:${{ env.PATH }}
+
+      # Create GitHub Release
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          # The action automatically replaces __VERSION__ with the version from tauri.conf.json
-          tagName: app-v__VERSION__ 
-          releaseName: 'App v__VERSION__'
-          releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }}
-          # Use bun as the package manager
-          packageManager: bun
+          draft: true
+          files: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/macos/*.app
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/msi/*.msi
+          token: ${{ secrets.GITHUB_TOKEN }}

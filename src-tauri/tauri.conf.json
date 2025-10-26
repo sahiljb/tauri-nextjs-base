@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.execdo",
   "build": {
-    "beforeDevCommand": "cd src && bun run dev",
+    "beforeDevCommand": "cd src && yarn run dev",
     "devUrl": "http://localhost:3000",
-    "beforeBuildCommand": "cd src && bun run build",
+    "beforeBuildCommand": "cd src && yarn run build",
     "frontendDist": "../src/.next"
   },
   "app": {

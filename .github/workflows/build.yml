@@ -50,13 +50,16 @@ jobs:
         uses: actions/cache@v4
         with:
           # Cache location for Bun dependencies
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          path: |
+            ~/.bun/install/cache
+            ./src/.next/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb', '**/package.json') }}
           restore-keys: |
             ${{ runner.os }}-bun-
 
       - name: Install Frontend Dependencies
-        # This installs all packages defined in package.json
+        # This installs all packages defined in package.json in the src folder
+        working-directory: ./src
         run: bun install
 
       - name: install Rust stable
@@ -75,8 +78,9 @@ jobs:
 
       # CRITICAL STEP: Build the web assets so Tauri can find them in the distDir
       - name: Build Frontend Assets
+        working-directory: ./src
         run: bun run build
-        # If your package.json script is named differently, update 'bun run build' accordingly.
+        # Building Next.js application in the src directory
 
       - uses: tauri-apps/tauri-action@v0
         env:

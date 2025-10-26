@@ -14,10 +14,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest' # for Arm based macs (M1 and above).
-            args: '--target aarch64-apple-darwin'
+          # Build targets for macOS. We include both arm64 and x64 targets here.
+          - platform: 'macos-latest' 
+            args: '--target aarch64-apple-darwin' # Builds for M1/M2/M3
+          # Linux build
           - platform: 'ubuntu-22.04'
             args: ''
+          # Windows build
           - platform: 'windows-latest'
             args: ''
 
@@ -26,46 +29,61 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
+          # These dependencies are required for building on Linux (specifically for WebKit and AppImages)
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: setup node
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          # cache: 'bun' # Set this to npm, yarn or pnpm.
 
-      # ----------------------------------------------------------------
-      # NEW STEP: Install Bun
-      # ----------------------------------------------------------------
+      # Setup Bun, which will be used for package management and building the frontend.
       - name: Install Bun
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
-      # ----------------------------------------------------------------
+
+      - name: Bun Cache
+        uses: actions/cache@v4
+        with:
+          # Cache location for Bun dependencies
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install Frontend Dependencies
+        # This installs all packages defined in package.json
+        run: bun install
 
       - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable # Set this to dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@stable
         with:
-          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
+          # Conditionally install required targets for macOS cross-compilation
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
+          # Cache Rust build artifacts for speed
+          # The workspace is set to the src-tauri folder to capture cargo/target dependencies
+          # Adjust if src-tauri is not in the root
           workspaces: './src-tauri -> target'
 
-      - name: install frontend dependencies
-        # If you don't have `beforeBuildCommand` configured you may want to build your frontend here too.
-        run: bun install # change this to npm or pnpm depending on which one you use.
+      # CRITICAL STEP: Build the web assets so Tauri can find them in the distDir
+      - name: Build Frontend Assets
+        run: bun run build
+        # If your package.json script is named differently, update 'bun run build' accordingly.
 
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
+          # The action automatically replaces __VERSION__ with the version from tauri.conf.json
+          tagName: app-v__VERSION__ 
           releaseName: 'App v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true

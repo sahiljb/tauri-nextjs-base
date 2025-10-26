@@ -99,6 +99,7 @@ jobs:
 
       # Verify build output
       - name: Verify Build Output
+        shell: bash
         run: |
           if [ -d "src/.next" ]; then
             echo "Next.js build successful"
@@ -107,15 +108,34 @@ jobs:
             exit 1
           fi
 
+      # Import Apple certificate for macOS builds
+      - name: Import Apple Certificate
+        if: matrix.platform == 'macos-latest' && env.APPLE_CERTIFICATE != ''
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
+          rm certificate.p12
+
       # Build Tauri application
       - name: Build Tauri App
         shell: bash
         run: |
           cd src-tauri
-          cargo tauri build ${{ matrix.args }}
+          if [ "$RUNNER_OS" = "macOS" ] && [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "Building without code signing..."
+            cargo tauri build ${{ matrix.args }} --target aarch64-apple-darwin --no-sign
+          else
+            cargo tauri build ${{ matrix.args }}
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ENABLE_CODE_SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}

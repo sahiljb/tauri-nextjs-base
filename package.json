@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tauri dev",
-    "dev:next": "cd src && yarn run dev",
-    "build": "cd src && yarn run build",
+    "dev:next": "cd src && bun run dev",
+    "build": "cd src && bun run build",
     "preview": "vite preview",
     "tauri": "tauri"
   },

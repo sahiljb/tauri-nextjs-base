@@ -76,6 +76,18 @@ jobs:
           # Adjust if src-tauri is not in the root
           workspaces: './src-tauri -> target'
 
+      - name: Install Tauri CLI (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cargo install tauri-cli --locked
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install Tauri CLI (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cargo install tauri-cli --locked
+          echo "$HOME/.cargo/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       # CRITICAL STEP: Build the web assets so Tauri can find them in the distDir
       - name: Build Frontend Assets
         working-directory: ./src
@@ -85,6 +97,15 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ENABLE_CODE_SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Add Bun to the PATH
+          PATH: ${{ github.workspace }}/.bun/bin:${{ env.PATH }}
         with:
           # The action automatically replaces __VERSION__ with the version from tauri.conf.json
           tagName: app-v__VERSION__ 
@@ -93,3 +114,5 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+          # Use bun as the package manager
+          packageManager: bun
